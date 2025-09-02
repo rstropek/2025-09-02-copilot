@@ -1,4 +1,4 @@
-# Draw 4-axis robot arm in home position (Next.js + Three.js)
+# Draw 5-axis robot arm in home position (Next.js + Three.js)
 
 ## Current State
 

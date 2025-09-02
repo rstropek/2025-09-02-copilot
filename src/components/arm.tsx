@@ -2,9 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+// Joint angles interface for the robot arm control
+export interface JointAngles {
+  j0: number; // yaw
+  j1: number; // pitch
+  j2: number; // pitch
+  j3: number; // pitch
+  j4: number; // pitch
+}
 
 interface ThreeSceneProps {
   className?: string;
+  jointAngles?: JointAngles;
 }
 
 // Robot arm dimensions (in meters, 1cm = 0.01m)
@@ -22,22 +33,22 @@ const DIMENSIONS = {
   }
 };
 
-// Home pose angles (in degrees) - adjusted for upward reaching pose
-const HOME_POSE = {
-  j0: 0, // base yaw (0°)
-  j1: 65, // shoulder pitch (65° to reach upward)
-  j2: 60, // elbow pitch (60° to fold naturally)
-  j3: 45, // wrist pitch (45° to point forward)
-  j4: 90, // pipette tilt (90° to point straight)
-};
-
 // Helper function to convert degrees to radians
 const degToRad = (degrees: number) => (degrees * Math.PI) / 180;
 
-export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
+export default function RobotArmScene({ className = '', jointAngles }: ThreeSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number>(0);
   const [isClient, setIsClient] = useState(false);
+  
+  // References to joint groups for real-time updates
+  const jointGroupsRef = useRef<{
+    j0?: THREE.Group;
+    j1?: THREE.Group;
+    j2?: THREE.Group;
+    j3?: THREE.Group;
+    j4?: THREE.Group;
+  }>({});
 
   useEffect(() => {
     setIsClient(true);
@@ -48,6 +59,15 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
 
     const container = mountRef.current;
     const { clientWidth: width, clientHeight: height } = container;
+
+    // Use provided joint angles or default values
+    const currentAngles = jointAngles || {
+      j0: 0, // base yaw (0°)
+      j1: 65, // shoulder pitch (65° to reach upward)
+      j2: 60, // elbow pitch (60° to fold naturally)
+      j3: 45, // wrist pitch (45° to point forward)
+      j4: 90, // pipette tilt (90° to point straight)
+    };
 
     // Scene setup
     const scene = new THREE.Scene();
@@ -70,6 +90,18 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
 
     // Add renderer to DOM
     container.appendChild(renderer.domElement);
+
+    // OrbitControls setup - allows mouse camera movement around the robot arm
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.3, 0); // Center the controls around the robot arm (slightly above ground)
+    controls.enableDamping = true; // Smooth camera movement
+    controls.dampingFactor = 0.05;
+    controls.enableZoom = true;
+    controls.enablePan = true;
+    controls.enableRotate = true;
+    controls.minDistance = 0.5; // Closest zoom
+    controls.maxDistance = 5; // Farthest zoom
+    controls.maxPolarAngle = Math.PI * 0.9; // Prevent camera from going below ground
 
     // Lighting
     const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
@@ -123,8 +155,9 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
     // J0 Group (base rotation around Y)
     const j0Group = new THREE.Group();
     j0Group.position.y = DIMENSIONS.base.height;
-    j0Group.rotation.y = degToRad(HOME_POSE.j0);
+    j0Group.rotation.y = degToRad(currentAngles.j0);
     robotArm.add(j0Group);
+    jointGroupsRef.current.j0 = j0Group;
 
     // Shoulder joint sphere
     const shoulderJointGeometry = new THREE.SphereGeometry(DIMENSIONS.joints.shoulder, 16, 16);
@@ -134,8 +167,9 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
 
     // J1 Group (shoulder pitch around X)
     const j1Group = new THREE.Group();
-    j1Group.rotation.x = degToRad(-HOME_POSE.j1);
+    j1Group.rotation.x = degToRad(-currentAngles.j1);
     j0Group.add(j1Group);
+    jointGroupsRef.current.j1 = j1Group;
 
     // Segment 1 (shoulder link)
     const segment1Geometry = new THREE.BoxGeometry(
@@ -159,8 +193,9 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
     // J2 Group (elbow pitch around X)
     const j2Group = new THREE.Group();
     j2Group.position.z = DIMENSIONS.segment1.length;
-    j2Group.rotation.x = degToRad(-HOME_POSE.j2);
+    j2Group.rotation.x = degToRad(-currentAngles.j2);
     j1Group.add(j2Group);
+    jointGroupsRef.current.j2 = j2Group;
 
     // Segment 2 (elbow link)
     const segment2Geometry = new THREE.BoxGeometry(
@@ -184,8 +219,9 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
     // J3 Group (wrist pitch around X)
     const j3Group = new THREE.Group();
     j3Group.position.z = DIMENSIONS.segment2.length;
-    j3Group.rotation.x = degToRad(-HOME_POSE.j3);
+    j3Group.rotation.x = degToRad(-currentAngles.j3);
     j2Group.add(j3Group);
+    jointGroupsRef.current.j3 = j3Group;
 
     // Segment 3 (wrist link)
     const segment3Geometry = new THREE.BoxGeometry(
@@ -209,8 +245,9 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
     // J4 Group (pipette tilt around X)
     const j4Group = new THREE.Group();
     j4Group.position.z = DIMENSIONS.segment3.length;
-    j4Group.rotation.x = degToRad(-HOME_POSE.j4);
+    j4Group.rotation.x = degToRad(-currentAngles.j4);
     j3Group.add(j4Group);
+    jointGroupsRef.current.j4 = j4Group;
 
     // Segment 4 (pipette)
     const segment4Geometry = new THREE.CylinderGeometry(
@@ -229,9 +266,10 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
     // Add robot arm to scene
     scene.add(robotArm);
 
-    // Animation loop (static scene, no rotation)
+    // Animation loop (now includes camera controls)
     const animate = () => {
       frameRef.current = requestAnimationFrame(animate);
+      controls.update(); // Update camera controls for smooth damping
       renderer.render(scene, camera);
     };
 
@@ -246,6 +284,9 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
       if (container && renderer.domElement) {
         container.removeChild(renderer.domElement);
       }
+      
+      // Cleanup controls
+      controls.dispose();
       
       // Dispose of Three.js resources
       baseGeometry.dispose();
@@ -266,6 +307,29 @@ export default function RobotArmScene({ className = '' }: ThreeSceneProps) {
       renderer.dispose();
     };
   }, [isClient]);
+
+  // Update joint rotations when jointAngles prop changes
+  useEffect(() => {
+    if (!jointAngles || !jointGroupsRef.current) return;
+
+    const { j0, j1, j2, j3, j4 } = jointAngles;
+    
+    if (jointGroupsRef.current.j0) {
+      jointGroupsRef.current.j0.rotation.y = degToRad(j0);
+    }
+    if (jointGroupsRef.current.j1) {
+      jointGroupsRef.current.j1.rotation.x = degToRad(-j1);
+    }
+    if (jointGroupsRef.current.j2) {
+      jointGroupsRef.current.j2.rotation.x = degToRad(-j2);
+    }
+    if (jointGroupsRef.current.j3) {
+      jointGroupsRef.current.j3.rotation.x = degToRad(-j3);
+    }
+    if (jointGroupsRef.current.j4) {
+      jointGroupsRef.current.j4.rotation.x = degToRad(-j4);
+    }
+  }, [jointAngles]);
 
   if (!isClient) {
     return (
