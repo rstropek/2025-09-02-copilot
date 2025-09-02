@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+import { RobotColor } from './color-selector';
+
 // Joint angles interface for the robot arm control
 export interface JointAngles {
   j0: number; // yaw
@@ -16,6 +18,7 @@ export interface JointAngles {
 interface ThreeSceneProps {
   className?: string;
   jointAngles?: JointAngles;
+  color?: RobotColor;
 }
 
 // Robot arm dimensions (in meters, 1cm = 0.01m)
@@ -36,7 +39,19 @@ const DIMENSIONS = {
 // Helper function to convert degrees to radians
 const degToRad = (degrees: number) => (degrees * Math.PI) / 180;
 
-export default function RobotArmScene({ className = '', jointAngles }: ThreeSceneProps) {
+// Helper function to get color hex value from color name
+const getColorHex = (color: RobotColor): number => {
+  switch (color) {
+    case 'red': return 0xff0000;
+    case 'blue': return 0x0066ff;
+    case 'green': return 0x00aa00;
+    case 'black': return 0x333333;
+    case 'white': return 0xffffff;
+    default: return 0x666666; // fallback gray
+  }
+};
+
+export default function RobotArmScene({ className = '', jointAngles, color = 'red' }: ThreeSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number>(0);
   const [isClient, setIsClient] = useState(false);
@@ -48,6 +63,16 @@ export default function RobotArmScene({ className = '', jointAngles }: ThreeScen
     j2?: THREE.Group;
     j3?: THREE.Group;
     j4?: THREE.Group;
+  }>({});
+
+  // References to materials for color updates
+  const materialsRef = useRef<{
+    base?: THREE.MeshStandardMaterial;
+    segment1?: THREE.MeshStandardMaterial;
+    segment2?: THREE.MeshStandardMaterial;
+    segment3?: THREE.MeshStandardMaterial;
+    pipette?: THREE.MeshStandardMaterial;
+    joints?: THREE.MeshStandardMaterial;
   }>({});
 
   useEffect(() => {
@@ -128,13 +153,24 @@ export default function RobotArmScene({ className = '', jointAngles }: ThreeScen
     const axesHelper = new THREE.AxesHelper(0.2);
     scene.add(axesHelper);
 
-    // Materials
-    const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
-    const segment1Material = new THREE.MeshStandardMaterial({ color: 0x777777 });
-    const segment2Material = new THREE.MeshStandardMaterial({ color: 0x888888 });
-    const segment3Material = new THREE.MeshStandardMaterial({ color: 0x999999 });
-    const pipetteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const jointMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+    // Materials - use selected color
+    const selectedColorHex = getColorHex(color);
+    const baseMaterial = new THREE.MeshStandardMaterial({ color: selectedColorHex });
+    const segment1Material = new THREE.MeshStandardMaterial({ color: selectedColorHex });
+    const segment2Material = new THREE.MeshStandardMaterial({ color: selectedColorHex });
+    const segment3Material = new THREE.MeshStandardMaterial({ color: selectedColorHex });
+    const pipetteMaterial = new THREE.MeshStandardMaterial({ color: selectedColorHex });
+    const jointMaterial = new THREE.MeshStandardMaterial({ color: selectedColorHex });
+
+    // Store material references for color updates
+    materialsRef.current = {
+      base: baseMaterial,
+      segment1: segment1Material,
+      segment2: segment2Material,
+      segment3: segment3Material,
+      pipette: pipetteMaterial,
+      joints: jointMaterial,
+    };
 
     // Create robot arm
     const robotArm = new THREE.Group();
@@ -306,7 +342,7 @@ export default function RobotArmScene({ className = '', jointAngles }: ThreeScen
       jointMaterial.dispose();
       renderer.dispose();
     };
-  }, [isClient]);
+  }, [isClient, jointAngles, color]);
 
   // Update joint rotations when jointAngles prop changes
   useEffect(() => {
@@ -330,6 +366,32 @@ export default function RobotArmScene({ className = '', jointAngles }: ThreeScen
       jointGroupsRef.current.j4.rotation.x = degToRad(-j4);
     }
   }, [jointAngles]);
+
+  // Update material colors when color prop changes
+  useEffect(() => {
+    if (!color || !materialsRef.current) return;
+
+    const selectedColorHex = getColorHex(color);
+    
+    if (materialsRef.current.base) {
+      materialsRef.current.base.color.setHex(selectedColorHex);
+    }
+    if (materialsRef.current.segment1) {
+      materialsRef.current.segment1.color.setHex(selectedColorHex);
+    }
+    if (materialsRef.current.segment2) {
+      materialsRef.current.segment2.color.setHex(selectedColorHex);
+    }
+    if (materialsRef.current.segment3) {
+      materialsRef.current.segment3.color.setHex(selectedColorHex);
+    }
+    if (materialsRef.current.pipette) {
+      materialsRef.current.pipette.color.setHex(selectedColorHex);
+    }
+    if (materialsRef.current.joints) {
+      materialsRef.current.joints.color.setHex(selectedColorHex);
+    }
+  }, [color]);
 
   if (!isClient) {
     return (

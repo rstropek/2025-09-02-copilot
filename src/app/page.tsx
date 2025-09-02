@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from "react";
-import Image from "next/image";
-import styles from "./page.module.css";
 import RobotArmScene from "@/components/arm";
 import { RobotArmControl, JointAngles } from "@/components/slider";
+import ColorSelector, { RobotColor } from "@/components/color-selector";
 
 export default function Home() {
   const [jointAngles, setJointAngles] = useState<JointAngles>({
@@ -15,10 +14,17 @@ export default function Home() {
     j4: 10   // pitch: 0-90, default 10
   });
 
+  const [robotColor, setRobotColor] = useState<RobotColor>('red');
+
   return (
     <>
       <RobotArmControl onChange={setJointAngles} />
-      <RobotArmScene className="scene" jointAngles={jointAngles} />
+      <ColorSelector 
+        label="Robot Color" 
+        value={robotColor} 
+        onChange={setRobotColor} 
+      />
+      <RobotArmScene className="scene" jointAngles={jointAngles} color={robotColor} />
     </>
   );
 }
